@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#05070b">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NEON ESCAPE">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta http-equiv="Content-Security-Policy"
+content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; worker-src 'self';">
+
+<title>NEON ESCAPE — 60S Challenge</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05070b;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+body{touch-action:none}
+#wrap{position:fixed;inset:0;background:#05070b}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#hud{position:absolute;inset:0;pointer-events:none;padding:max(14px,env(safe-area-inset-top)) 16px max(18px,env(safe-area-inset-bottom))}
+.top{display:flex;justify-content:space-between;align-items:flex-start}
+.brand{font-weight:950;letter-spacing:.12em;font-size:12px;opacity:.8}
+.stat{text-align:right;font-weight:900}
+#score{font-size:30px;line-height:1}
+#time{font-size:12px;opacity:.65;margin-top:4px}
+#combo{position:absolute;top:22%;left:50%;transform:translate(-50%,-50%) scale(.8);font-size:24px;font-weight:950;opacity:0;transition:.18s}
+#combo.pop{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#event{position:absolute;top:34%;left:50%;width:90%;transform:translateX(-50%);text-align:center;font-size:clamp(26px,8vw,46px);font-weight:1000;letter-spacing:-.04em;text-shadow:0 4px 30px #000;opacity:0;transition:.25s}
+#event.show{opacity:1}
+#hint{position:absolute;bottom:max(22px,calc(env(safe-area-inset-bottom) + 8px));left:50%;transform:translateX(-50%);font-size:12px;opacity:.45;white-space:nowrap}
+#menu,#gameover{
+ position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+ background:linear-gradient(to bottom,rgba(5,7,11,.72),rgba(5,7,11,.92));padding:28px;z-index:20
+}
+.card{width:min(92vw,440px);text-align:center}
+h1{font-size:clamp(42px,13vw,72px);line-height:.84;margin:0 0 18px;letter-spacing:-.07em}
+.subtitle{opacity:.65;line-height:1.55;font-size:14px;margin:0 auto 24px;max-width:330px}
+.mainbtn{width:100%;border:0;border-radius:18px;padding:17px 18px;background:#fff;color:#05070b;font-weight:950;font-size:16px;margin-top:10px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.minibtn{border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:13px 10px;background:rgba(255,255,255,.055);color:#fff;font-weight:800;font-size:13px}
+.minibtn.active{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.36)}
+.small{margin-top:18px;font-size:11px;opacity:.42;line-height:1.5}
+#gameover{display:none}
+#finalScore{font-size:72px;font-weight:1000;letter-spacing:-.07em;margin:2px 0 4px}
+#best{font-size:13px;opacity:.6;margin-bottom:20px}
+#cleanBadge{position:absolute;left:50%;top:max(14px,env(safe-area-inset-top));transform:translateX(-50%);font-size:10px;letter-spacing:.18em;font-weight:900;opacity:.28}
+.clean .brand,.clean #hint{display:none}
+.flash{animation:flash .2s}
+@keyframes flash{50%{filter:brightness(2)}}
+</style>
+</head>
+<body>
+<div id="wrap">
+<canvas id="game"></canvas>
+<div id="hud">
+ <div class="top">
+  <div class="brand">NEON ESCAPE</div>
+  <div class="stat"><div id="score">0</div><div id="time">60.0s</div></div>
+ </div>
+ <div id="combo">PERFECT ×2</div>
+ <div id="event"></div>
+ <div id="hint">CHẠM TRÁI / PHẢI ĐỂ ĐỔI LÀN</div>
+</div>
+<div id="cleanBadge">60S CHALLENGE</div>
+
+<div id="menu">
+ <div class="card">
+  <h1>NEON<br>ESCAPE</h1>
+  <p class="subtitle">Chỉ cần đổi làn. Càng sống lâu, tốc độ càng tăng. Thiết kế dọc để quay màn hình đăng Shorts.</p>
+  <button class="mainbtn" id="start">CHƠI 60 GIÂY</button>
+  <div class="row">
+   <button class="minibtn active" id="auto">AUTO: BẬT</button>
+   <button class="minibtn active" id="clean">VIDEO MODE: BẬT</button>
+  </div>
+  <div class="row">
+   <button class="minibtn active" id="mode60">60 GIÂY</button>
+   <button class="minibtn" id="endless">ENDLESS</button>
+  </div>
+  <button class="minibtn" id="deleteData" style="width:100%;margin-top:10px">XÓA DỮ LIỆU GAME TRÊN MÁY</button>
+  <div class="small">AUTO giúp game tự né để anh chỉ cần bật quay màn hình. Tắt AUTO nếu muốn tự chơi.<br><a href="privacy.html" style="color:#fff;opacity:.7">Quyền riêng tư & bảo mật</a></div>
+ </div>
+</div>
+
+<div id="gameover">
+ <div class="card">
+  <div id="resultTitle" style="font-weight:950;font-size:17px;letter-spacing:.12em">KẾT QUẢ</div>
+  <div id="finalScore">0</div>
+  <div id="best">BEST 0</div>
+  <button class="mainbtn" id="again">CHẠY LẠI</button>
+  <button class="minibtn" id="home" style="width:100%;margin-top:10px">VỀ MENU</button>
+ </div>
+</div>
+</div>
+
+<script>
+(()=>{
+const c=document.getElementById('game'),ctx=c.getContext('2d');
+const wrap=document.getElementById('wrap');
+const menu=document.getElementById('menu'),over=document.getElementById('gameover');
+const scoreEl=document.getElementById('score'),timeEl=document.getElementById('time');
+const comboEl=document.getElementById('combo'),eventEl=document.getElementById('event');
+const finalScore=document.getElementById('finalScore'),bestEl=document.getElementById('best');
+const startBtn=document.getElementById('start'),again=document.getElementById('again'),home=document.getElementById('home');
+const autoBtn=document.getElementById('auto'),cleanBtn=document.getElementById('clean');
+const mode60Btn=document.getElementById('mode60'),endlessBtn=document.getElementById('endless');
+const deleteDataBtn=document.getElementById('deleteData');
+
+let W=0,H=0,dpr=1,last=0,running=false,auto=true,clean=true,timed=true;
+let elapsed=0,score=0,combo=0,best=Number(localStorage.getItem('neonEscapeBest')||0);
+let lane=1,targetLane=1,playerX=0,playerY=0;
+let rows=[],particles=[],stars=[],spawn=0.25,speed=0,baseSpeed=0;
+let eventFlags={15:false,30:false,45:false};
+let hue=190,shake=0,slowMo=0;
+
+function resize(){
+ dpr=Math.min(2,window.devicePixelRatio||1);
+ W=innerWidth;H=innerHeight;c.width=W*dpr;c.height=H*dpr;
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+ playerY=H*.79;
+ if(!playerX)playerX=laneX(lane);
+ stars=Array.from({length:52},()=>({x:Math.random()*W,y:Math.random()*H,s:Math.random()*1.8+.4,a:Math.random()*.5+.08}));
+}
+function laneX(i){const left=W*.18,right=W*.82;return left+(right-left)*(i/2)}
+function rnd(a,b){return a+Math.random()*(b-a)}
+function vibrate(p){if(navigator.vibrate)navigator.vibrate(p)}
+let audio=null;
+function beep(f=180,d=.05,v=.025){
+ try{audio ||= new (window.AudioContext||window.webkitAudioContext)();let o=audio.createOscillator(),g=audio.createGain();
+ o.type='sine';o.frequency.value=f;g.gain.value=v;o.connect(g);g.connect(audio.destination);o.start();
+ g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+d);o.stop(audio.currentTime+d)}catch(e){}
+}
+function resetGame(){
+ rows=[];particles=[];elapsed=0;score=0;combo=0;lane=1;targetLane=1;playerX=laneX(1);spawn=.3;
+ eventFlags={15:false,30:false,45:false};hue=Math.floor(rnd(175,215));shake=0;slowMo=0;
+ scoreEl.textContent='0';timeEl.textContent=timed?'60.0s':'∞';eventEl.classList.remove('show');
+}
+function makeRow(){
+ let safe=Math.floor(Math.random()*3);
+ if(rows.length && Math.random()<.5) {
+   let prev=rows[rows.length-1].safe;
+   safe=Math.max(0,Math.min(2,prev+(Math.random()<.5?-1:1)));
+ }
+ const doubleBlock=Math.random()<Math.min(.82,.38+elapsed*.007);
+ rows.push({y:-55,safe,passed:false,near:false,doubleBlock,coin:Math.random()<.72,spin:Math.random()*6.28});
+}
+function burst(x,y,n=12){
+ for(let i=0;i<n;i++)particles.push({x,y,vx:rnd(-110,110),vy:rnd(-140,40),life:rnd(.35,.75),r:rnd(2,5)});
+}
+function announce(txt){
+ eventEl.textContent=txt;eventEl.classList.add('show');setTimeout(()=>eventEl.classList.remove('show'),1100);
+}
+function setLane(n){
+ targetLane=Math.max(0,Math.min(2,n));beep(240+targetLane*60,.035,.014);
+}
+function mysteryEvents(){
+ if(timed){
+  if(elapsed>15&&!eventFlags[15]){eventFlags[15]=true;announce('TỐC ĐỘ ×1.25');shake=7;vibrate([25,35,25])}
+  if(elapsed>30&&!eventFlags[30]){eventFlags[30]=true;announce('ĐỪNG CHỚP MẮT');hue=(hue+110)%360;shake=10;vibrate([30,30,30])}
+  if(elapsed>45&&!eventFlags[45]){eventFlags[45]=true;announce('15 GIÂY CUỐI');slowMo=.6;shake=12;vibrate([40,30,40])}
+ }
+}
+function update(dt){
+ if(!running)return;
+ elapsed+=dt;
+ mysteryEvents();
+ baseSpeed=H*(.34+Math.min(.32,elapsed*.0062));
+ speed=baseSpeed*(slowMo>0?.72:1);
+ if(slowMo>0){slowMo-=dt;if(slowMo<=0)announce('GO!')}
+ spawn-=dt;
+ const interval=Math.max(.44,.82-elapsed*.006);
+ if(spawn<=0){makeRow();spawn=interval}
+ playerX+=(laneX(targetLane)-playerX)*Math.min(1,dt*13);
+ if(Math.abs(playerX-laneX(targetLane))<1)lane=targetLane;
+ if(auto){
+   let upcoming=rows.filter(r=>r.y<playerY+10&&!r.passed).sort((a,b)=>b.y-a.y)[0];
+   if(upcoming && upcoming.y>playerY-H*.36){
+      if(targetLane!==upcoming.safe)setLane(upcoming.safe);
+   }
+ }
+ for(let r of rows){
+   r.y+=speed*dt;r.spin+=dt*2;
+   const py=playerY;
+   if(!r.passed && r.y>py+34){
+      r.passed=true;combo++;
+      const bonus=10+Math.min(90,combo*2);score+=bonus;
+      if(r.near){score+=50;announce('SUÝT NỮA! +50')}
+      if(combo%5===0){
+        comboEl.textContent='PERFECT ×'+combo;comboEl.classList.add('pop');setTimeout(()=>comboEl.classList.remove('pop'),500);
+        burst(playerX,playerY,18);beep(520,.08,.024);
+      }
+   }
+   if(!r.passed && Math.abs(r.y-playerY)<32){
+      const nearest=[0,1,2].reduce((a,b)=>Math.abs(playerX-laneX(a))<Math.abs(playerX-laneX(b))?a:b);
+      const blocked = nearest!==r.safe;
+      if(blocked){
+        if(auto && Math.abs(playerX-laneX(r.safe))<W*.13){r.near=true}
+        else return die();
+      } else if(Math.abs(r.y-playerY)<18 && r.coin){
+        score+=25;r.coin=false;burst(laneX(r.safe),r.y,8);beep(660,.04,.016)
+      }
+   }
+ }
+ rows=rows.filter(r=>r.y<H+90);
+ for(let p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=260*dt;p.life-=dt}
+ particles=particles.filter(p=>p.life>0);
+ score += dt*4;
+ scoreEl.textContent=Math.floor(score);
+ if(timed){
+   const remain=Math.max(0,60-elapsed);timeEl.textContent=remain.toFixed(1)+'s';
+   if(remain<=0)return finish();
+ } else timeEl.textContent='∞';
+}
+function die(){
+ shake=18;vibrate([80,40,80]);beep(75,.25,.045);burst(playerX,playerY,28);
+ running=false;setTimeout(()=>showOver('GAME OVER'),260);
+}
+function finish(){
+ running=false;vibrate([30,40,30,40,80]);beep(740,.15,.03);burst(playerX,playerY,35);announce('HOÀN THÀNH!');
+ setTimeout(()=>showOver('60S COMPLETE'),650);
+}
+function showOver(title){
+ const s=Math.floor(score);best=Math.max(best,s);localStorage.setItem('neonEscapeBest',best);
+ document.getElementById('resultTitle').textContent=title;finalScore.textContent=s;bestEl.textContent='BEST '+best;over.style.display='flex';
+}
+function rr(x,y,w,h,r){
+ r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.roundRect(x,y,w,h,r);
+}
+function draw(){
+ ctx.save();
+ if(shake>0){ctx.translate(rnd(-shake,shake),rnd(-shake,shake));shake*=.82;if(shake<.3)shake=0}
+ ctx.fillStyle='#05070b';ctx.fillRect(-30,-30,W+60,H+60);
+ let grad=ctx.createRadialGradient(W/2,H*.6,10,W/2,H*.6,H*.75);
+ grad.addColorStop(0,`hsla(${hue},85%,50%,.12)`);grad.addColorStop(1,'rgba(0,0,0,0)');
+ ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+ for(let s of stars){s.y+=speed*.035/60;if(s.y>H)s.y=0;ctx.fillStyle=`rgba(255,255,255,${s.a})`;ctx.fillRect(s.x,s.y,s.s,s.s)}
+ ctx.lineWidth=1;
+ for(let i=0;i<3;i++){
+   ctx.strokeStyle='rgba(255,255,255,.055)';ctx.beginPath();ctx.moveTo(W/2+(laneX(i)-W/2)*.25,0);ctx.lineTo(laneX(i),H);ctx.stroke();
+ }
+ const gapW=Math.min(W*.25,110), blockW=Math.min(W*.27,120);
+ for(let r of rows){
+  for(let i=0;i<3;i++){
+   if(i===r.safe)continue;
+   if(!r.doubleBlock && i===((r.safe+1)%3))continue;
+   let x=laneX(i)-blockW/2,y=r.y-23;
+   ctx.shadowBlur=18;ctx.shadowColor=`hsla(${(hue+145)%360},95%,58%,.55)`;
+   ctx.fillStyle=`hsla(${(hue+145)%360},80%,55%,.92)`;rr(x,y,blockW,46,13);ctx.fill();
+   ctx.shadowBlur=0;
+  }
+  ctx.strokeStyle=`hsla(${hue},90%,65%,.25)`;ctx.lineWidth=2;rr(laneX(r.safe)-gapW/2,r.y-24,gapW,48,14);ctx.stroke();
+  if(r.coin){
+   ctx.save();ctx.translate(laneX(r.safe),r.y);ctx.rotate(r.spin);ctx.shadowBlur=16;ctx.shadowColor=`hsla(${hue},95%,65%,.8)`;
+   ctx.fillStyle=`hsla(${hue},90%,65%,1)`;ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(8,0);ctx.lineTo(0,10);ctx.lineTo(-8,0);ctx.closePath();ctx.fill();ctx.restore();
+  }
+ }
+ for(let i=5;i>=1;i--){ctx.fillStyle=`hsla(${hue},95%,65%,${.05*i})`;ctx.beginPath();ctx.arc(playerX,playerY+i*11,7+i*1.8,0,Math.PI*2);ctx.fill()}
+ ctx.shadowBlur=30;ctx.shadowColor=`hsla(${hue},100%,65%,1)`;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(playerX,playerY,13,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle=`hsla(${hue},90%,58%,1)`;ctx.beginPath();ctx.arc(playerX,playerY,7,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+ for(let p of particles){ctx.fillStyle=`hsla(${hue},95%,70%,${Math.max(0,p.life)})`;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.283);ctx.fill()}
+ ctx.restore();
+}
+function loop(t){
+ if(!last)last=t;let dt=Math.min(.033,(t-last)/1000);last=t;update(dt);draw();requestAnimationFrame(loop)
+}
+function start(){
+ resetGame();menu.style.display='none';over.style.display='none';running=true;last=performance.now();beep(320,.08,.02)
+}
+function toggleBtn(btn,on,label){btn.classList.toggle('active',on);btn.textContent=label+(on?'BẬT':'TẮT')}
+autoBtn.onclick=()=>{auto=!auto;toggleBtn(autoBtn,auto,'AUTO: ')};
+cleanBtn.onclick=()=>{clean=!clean;wrap.classList.toggle('clean',clean);toggleBtn(cleanBtn,clean,'VIDEO MODE: ')};
+mode60Btn.onclick=()=>{timed=true;mode60Btn.classList.add('active');endlessBtn.classList.remove('active');startBtn.textContent='CHƠI 60 GIÂY'};
+endlessBtn.onclick=()=>{timed=false;endlessBtn.classList.add('active');mode60Btn.classList.remove('active');startBtn.textContent='CHƠI ENDLESS'};
+startBtn.onclick=start;again.onclick=start;home.onclick=()=>{over.style.display='none';menu.style.display='flex'};
+window.addEventListener('pointerdown',e=>{
+ if(!running||auto)return;
+ if(e.clientX<W/2)setLane(targetLane-1);else setLane(targetLane+1)
+});
+window.addEventListener('keydown',e=>{
+ if(!running||auto)return;if(e.key==='ArrowLeft'||e.key==='a')setLane(targetLane-1);if(e.key==='ArrowRight'||e.key==='d')setLane(targetLane+1)
+});
+deleteDataBtn.onclick=()=>{
+ if(confirm('Xóa toàn bộ điểm và dữ liệu game đã lưu trên thiết bị này?')){
+   localStorage.clear();
+   best=0;
+   alert('Đã xóa dữ liệu game trên thiết bị.');
+ }
+};
+if('serviceWorker' in navigator){
+ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+window.addEventListener('resize',resize);
+wrap.classList.toggle('clean',clean);resize();requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
