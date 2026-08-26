@@ -1,0 +1,22 @@
+NEON ESCAPE — BẢN CÀI iPHONE (PWA)
+
+CÁCH CÀI AN TOÀN
+1. Mở link GitHub Pages bằng Safari trên iPhone.
+2. Chạm Chia sẻ (Share).
+3. Chọn "Thêm vào Màn hình chính".
+4. Bật "Mở dưới dạng ứng dụng web" nếu tùy chọn này xuất hiện.
+5. Chạm "Thêm".
+
+BẢO MẬT
+- Không yêu cầu camera, microphone, ảnh, danh bạ hoặc vị trí.
+- Không analytics.
+- Không quảng cáo SDK.
+- Không tracker.
+- Không API gửi dữ liệu ra máy chủ.
+- Chỉ lưu điểm cao / cài đặt bằng localStorage trên thiết bị.
+- Có nút xóa dữ liệu trong menu.
+- Có service worker để chạy offline sau lần tải đầu.
+
+QUAN TRỌNG
+- iPhone không cho trang web tự bấm cài đặt thay người dùng.
+- Không cần cài .IPA, chứng chỉ lạ hoặc MDM cho bản game này.
