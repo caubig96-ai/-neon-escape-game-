@@ -1,0 +1,27 @@
+name: CAUBIGRemote
+options:
+  bundleIdPrefix: com.caubig
+settings:
+  base:
+    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    SWIFT_VERSION: 5.0
+targets:
+  CAUBIGRemote:
+    type: application
+    platform: iOS
+    sources:
+      - path: CAUBIGRemote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.caubig.remote
+        PRODUCT_NAME: CAU-BIG Remote
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: CAU-BIG Remote
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Ứng dụng cần truy cập mạng nội bộ để bật và điều khiển PC CAU-BIG.
+        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        TARGETED_DEVICE_FAMILY: 1
+        CODE_SIGN_STYLE: Manual
+    scheme:
+      testTargets: []
