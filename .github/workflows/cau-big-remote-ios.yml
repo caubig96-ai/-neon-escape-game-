@@ -1,0 +1,33 @@
+name: Build CAU-BIG Remote iPhone
+
+on:
+  push:
+    branches: ["cau-big-remote-build"]
+    paths:
+      - "cau-big-remote/**"
+      - ".github/workflows/cau-big-remote-ios.yml"
+  workflow_dispatch:
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: |
+          cd cau-big-remote/ios
+          xcodegen generate
+      - name: Build unsigned IPA
+        run: |
+          cd cau-big-remote/ios
+          xcodebuild -project CAUBIGRemote.xcodeproj -scheme CAUBIGRemote -configuration Release -sdk iphoneos -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          mkdir -p Payload
+          cp -R "build/Build/Products/Release-iphoneos/CAU-BIG Remote.app" Payload/
+          zip -qry CAU-BIG-Remote-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CAU-BIG-iPhone-Unsigned
+          path: cau-big-remote/ios/CAU-BIG-Remote-unsigned.ipa
+          if-no-files-found: error
