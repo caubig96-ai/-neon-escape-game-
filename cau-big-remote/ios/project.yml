@@ -19,7 +19,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: CAU-BIG Remote
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: Ứng dụng cần truy cập mạng nội bộ để bật và điều khiển PC CAU-BIG.
-        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
+        INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
         TARGETED_DEVICE_FAMILY: 1
         CODE_SIGN_STYLE: Manual
