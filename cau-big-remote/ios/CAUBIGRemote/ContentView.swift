@@ -5,7 +5,12 @@ import Darwin
 struct ContentView: View {
     @AppStorage("pcIP") private var pcIP = "192.168.2.139"
     @AppStorage("broadcastIP") private var broadcastIP = "192.168.2.255"
-    @AppStorage("pin") private var pin = ""
+    @AppStorage("internetMode") private var internetMode = false
+    @AppStorage("remoteWakeHost") private var remoteWakeHost = ""
+    @AppStorage("remoteWakePort") private var remoteWakePort = "40009"
+    @AppStorage("remoteControlURL") private var remoteControlURL = ""
+    @AppStorage("controlToken") private var controlToken = "CBR-2026-7f2d9c4a-9e31-4b6d"
+
     @State private var online = false
     @State private var message = "Sẵn sàng"
     @State private var showSettings = false
@@ -57,14 +62,14 @@ struct ContentView: View {
             }
             .navigationTitle("CAU-BIG Remote")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 }
             }
             .sheet(isPresented: $showSettings) {
                 NavigationStack {
                     Form {
-                        Section("Mạng PC") {
+                        Section("Mạng trong nhà") {
                             TextField("IP PC", text: $pcIP)
                                 .textInputAutocapitalization(.never)
                                 .keyboardType(.numbersAndPunctuation)
@@ -72,16 +77,34 @@ struct ContentView: View {
                                 .textInputAutocapitalization(.never)
                                 .keyboardType(.numbersAndPunctuation)
                             LabeledContent("MAC", value: mac)
-                            LabeledContent("Port điều khiển", value: "8765")
-                            SecureField("PIN đã đặt trên PC", text: $pin)
-                                .keyboardType(.numberPad)
+                            LabeledContent("Port Companion", value: "8765")
                         }
-                        Section {
-                            Text("Bật máy dùng Wake-on-LAN. Các lệnh Tắt/Restart/Ngủ/Khóa cần CAU-BIG Companion chạy trên Windows.")
+
+                        Section("Điều khiển từ Internet") {
+                            Toggle("Bật chế độ 3G/4G/5G", isOn: $internetMode)
+                            TextField("IP công khai hoặc DDNS router", text: $remoteWakeHost)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                            TextField("Port Wake ngoài nhà", text: $remoteWakePort)
+                                .keyboardType(.numberPad)
+                            TextField("URL điều khiển Tailscale", text: $remoteControlURL)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                            SecureField("Mã bảo mật Companion", text: $controlToken)
+                                .textInputAutocapitalization(.never)
+                        }
+
+                        Section("Cách hoạt động") {
+                            Text("Ở nhà: app gửi Wake-on-LAN trực tiếp. Ở ngoài: app gửi Magic Packet tới router qua IP công khai/DDNS. Router phải chuyển tiếp UDP tới mạng LAN. Các lệnh Tắt/Restart/Ngủ/Khóa nên đi qua Tailscale, không mở cổng 8765 trực tiếp ra Internet.")
+                                .font(.footnote)
                         }
                     }
                     .navigationTitle("Cài đặt")
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Xong") { showSettings = false } } }
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Xong") { showSettings = false }
+                        }
+                    }
                 }
             }
             .task { checkStatus() }
@@ -102,47 +125,118 @@ struct ContentView: View {
     }
 
     private func wakePC() {
-        let ok = sendMagicPacket(mac: mac, broadcast: broadcastIP, port: 9)
-        message = ok ? "Đã gửi lệnh bật máy. Chờ khoảng 5–20 giây." : "Không gửi được Wake-on-LAN. Kiểm tra Wi-Fi và Broadcast IP."
-        if ok {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { checkStatus() }
+        let localOK = sendMagicPacket(mac: mac, host: broadcastIP, port: 9, allowBroadcast: true)
+        var remoteOK = false
+
+        if internetMode {
+            let host = remoteWakeHost.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !host.isEmpty {
+                let port = UInt16(remoteWakePort) ?? 40009
+                remoteOK = sendMagicPacket(mac: mac, host: host, port: port, allowBroadcast: false)
+            }
+        }
+
+        if localOK && remoteOK {
+            message = "Đã gửi lệnh bật máy qua Wi-Fi nhà và Internet."
+        } else if remoteOK {
+            message = "Đã gửi lệnh bật máy qua Internet. Chờ khoảng 5–20 giây."
+        } else if localOK {
+            message = internetMode ? "Đã gửi Wake-on-LAN trong nhà. Chưa gửi được qua Internet; kiểm tra DDNS/IP và port router." : "Đã gửi lệnh bật máy. Chờ khoảng 5–20 giây."
+        } else {
+            message = "Không gửi được lệnh bật máy. Kiểm tra cấu hình mạng."
+        }
+
+        if localOK || remoteOK {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 7) { checkStatus() }
         }
     }
 
+    private func candidateBaseURLs() -> [(URL, String)] {
+        var result: [(URL, String)] = []
+        if let local = URL(string: "http://\(pcIP):8765") {
+            result.append((local, "mạng nhà"))
+        }
+
+        if internetMode {
+            var remote = remoteControlURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            while remote.hasSuffix("/") { remote.removeLast() }
+            if !remote.isEmpty, let url = URL(string: remote) {
+                result.append((url, "Internet/Tailscale"))
+            }
+        }
+        return result
+    }
+
     private func sendAction(_ action: String) {
-        guard let url = URL(string: "http://\(pcIP):8765/action") else { return }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 5
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        guard !pin.isEmpty else {
-            message = "Hãy mở Cài đặt và nhập PIN đã đặt khi cài Companion trên PC."
+        let bases = candidateBaseURLs()
+        guard !bases.isEmpty else {
+            message = "Chưa có địa chỉ điều khiển PC."
             return
         }
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["action": action, "pin": pin])
-        URLSession.shared.dataTask(with: req) { _, response, error in
+        tryAction(action, bases: bases, index: 0)
+    }
+
+    private func tryAction(_ action: String, bases: [(URL, String)], index: Int) {
+        guard index < bases.count else {
             DispatchQueue.main.async {
-                if let error = error {
-                    message = "Không kết nối được PC: \(error.localizedDescription)"
-                    online = false
-                } else if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
-                    message = "Đã gửi lệnh \(label(action))."
+                message = "Không kết nối được PC. Kiểm tra Companion/Tailscale."
+                online = false
+            }
+            return
+        }
+
+        let (base, source) = bases[index]
+        let url = base.appendingPathComponent("action")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 4
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["action": action, "token": controlToken])
+
+        URLSession.shared.dataTask(with: req) { _, response, error in
+            if error == nil, let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                DispatchQueue.main.async {
+                    message = "Đã gửi lệnh \(label(action)) qua \(source)."
                     if action == "shutdown" || action == "restart" || action == "sleep" { online = false }
-                } else {
-                    message = "PC không nhận lệnh. Kiểm tra Companion."
                 }
+            } else {
+                tryAction(action, bases: bases, index: index + 1)
             }
         }.resume()
     }
 
     private func checkStatus() {
-        guard let url = URL(string: "http://\(pcIP):8765/status") else { return }
-        var req = URLRequest(url: url)
-        req.timeoutInterval = 2
-        URLSession.shared.dataTask(with: req) { _, response, error in
+        let bases = candidateBaseURLs()
+        guard !bases.isEmpty else {
+            online = false
+            message = "Chưa có địa chỉ điều khiển PC."
+            return
+        }
+        tryStatus(bases: bases, index: 0)
+    }
+
+    private func tryStatus(bases: [(URL, String)], index: Int) {
+        guard index < bases.count else {
             DispatchQueue.main.async {
-                online = (error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
-                message = online ? "PC đang trực tuyến." : "PC đang tắt hoặc Companion chưa chạy."
+                online = false
+                message = "PC đang tắt hoặc chưa kết nối được Companion."
+            }
+            return
+        }
+
+        let (base, source) = bases[index]
+        let url = base.appendingPathComponent("status")
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 2.5
+
+        URLSession.shared.dataTask(with: req) { _, response, error in
+            if error == nil, let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                DispatchQueue.main.async {
+                    online = true
+                    message = "PC đang trực tuyến qua \(source)."
+                }
+            } else {
+                tryStatus(bases: bases, index: index + 1)
             }
         }.resume()
     }
@@ -158,9 +252,10 @@ struct ContentView: View {
     }
 }
 
-private func sendMagicPacket(mac: String, broadcast: String, port: UInt16) -> Bool {
+private func sendMagicPacket(mac: String, host: String, port: UInt16, allowBroadcast: Bool) -> Bool {
     let clean = mac.replacingOccurrences(of: ":", with: "").replacingOccurrences(of: "-", with: "")
     guard clean.count == 12 else { return false }
+
     var macBytes = [UInt8]()
     for i in stride(from: 0, to: 12, by: 2) {
         let start = clean.index(clean.startIndex, offsetBy: i)
@@ -168,20 +263,24 @@ private func sendMagicPacket(mac: String, broadcast: String, port: UInt16) -> Bo
         guard let b = UInt8(clean[start..<end], radix: 16) else { return false }
         macBytes.append(b)
     }
+
     var packet = [UInt8](repeating: 0xFF, count: 6)
     for _ in 0..<16 { packet.append(contentsOf: macBytes) }
 
     let sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
     guard sock >= 0 else { return false }
     defer { close(sock) }
-    var yes: Int32 = 1
-    if setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, socklen_t(MemoryLayout<Int32>.size)) != 0 { return false }
 
+    if allowBroadcast {
+        var yes: Int32 = 1
+        if setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, socklen_t(MemoryLayout<Int32>.size)) != 0 { return false }
+    }
+
+    guard let ip = resolveIPv4(host) else { return false }
     var addr = sockaddr_in()
     addr.sin_family = sa_family_t(AF_INET)
     addr.sin_port = port.bigEndian
-    let converted = broadcast.withCString { inet_pton(AF_INET, $0, &addr.sin_addr) }
-    guard converted == 1 else { return false }
+    addr.sin_addr = ip
 
     let sent = packet.withUnsafeBytes { buf -> Int in
         withUnsafePointer(to: &addr) { ptr in
@@ -191,4 +290,24 @@ private func sendMagicPacket(mac: String, broadcast: String, port: UInt16) -> Bo
         }
     }
     return sent == packet.count
+}
+
+private func resolveIPv4(_ rawHost: String) -> in_addr? {
+    var host = rawHost.trimmingCharacters(in: .whitespacesAndNewlines)
+    if host.hasPrefix("udp://") { host.removeFirst(6) }
+    if host.hasSuffix("/") { host.removeLast() }
+    guard !host.isEmpty else { return nil }
+
+    var address = in_addr()
+    let numeric = host.withCString { inet_pton(AF_INET, $0, &address) }
+    if numeric == 1 { return address }
+
+    guard let entry = host.withCString({ gethostbyname($0) }) else { return nil }
+    guard entry.pointee.h_addrtype == AF_INET,
+          entry.pointee.h_length == Int32(MemoryLayout<in_addr>.size),
+          let list = entry.pointee.h_addr_list,
+          let first = list[0] else { return nil }
+
+    memcpy(&address, first, MemoryLayout<in_addr>.size)
+    return address
 }
